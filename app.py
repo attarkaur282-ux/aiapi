@@ -1,7 +1,9 @@
 from fastapi import FastAPI, Query
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import httpx
 import os
+import json
 
 app = FastAPI()
 
@@ -16,28 +18,59 @@ DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "sk-583e4a59c58e480384006e
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 
 @app.get("/")
-def root():
-    return {
+async def root():
+    return JSONResponse({
         "status": "✅ API is live",
-        "developer": "@notxsatvir"
-    }
+        "developer": "@notxsatvir",
+        "message": "Use /chat?message=your+question"
+    })
 
 @app.get("/chat")
-async def chat_get(message: str = Query(...)):
-    headers = {
-        "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "model": "deepseek-chat",
-        "messages": [{"role": "user", "content": message}],
-        "stream": False
-    }
-
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        resp = await client.post(f"{DEEPSEEK_BASE_URL}/chat/completions", headers=headers, json=payload)
-        data = resp.json()
-        return {
-            "reply": data["choices"][0]["message"]["content"],
-            "developer": "@notxsatvir"
+async def chat_get(message: str = Query(..., description="Your question")):
+    try:
+        headers = {
+            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+            "Content-Type": "application/json"
         }
+        payload = {
+            "model": "deepseek-chat",
+            "messages": [{"role": "user", "content": message}],
+            "stream": False
+        }
+
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(
+                f"{DEEPSEEK_BASE_URL}/chat/completions",
+                headers=headers,
+                json=payload
+            )
+            
+            if response.status_code != 200:
+                return JSONResponse({
+                    "success": False,
+                    "error": f"API Error: {response.status_code}",
+                    "developer": "@notxsatvir"
+                })
+            
+            data = response.json()
+            reply = data["choices"][0]["message"]["content"]
+            
+            return JSONResponse({
+                "success": True,
+                "reply": reply,
+                "developer": "@notxsatvir"
+            })
+            
+    except Exception as e:
+        return JSONResponse({
+            "success": False,
+            "error": str(e),
+            "developer": "@notxsatvir"
+        })
+
+@app.get("/test")
+async def test():
+    return JSONResponse({
+        "message": "API is working!",
+        "developer": "@notxsatvir"
+    })
