@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -7,7 +6,7 @@ from typing import Optional
 import os
 
 # ================================================================
-# CONFIG - VERCEL ENV SE API KEY READ KAREGA
+# CONFIG
 # ================================================================
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "sk-583e4a59c58e480384006e9b217f2087")
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
@@ -33,8 +32,8 @@ app.add_middleware(
 # ================================================================
 class ChatRequest(BaseModel):
     message: str
-    model: Optional[str] = "deepseek-chat"  # ✅ Fixed model name
-    thinking: Optional[bool] = True
+    model: Optional[str] = "deepseek-chat"
+    thinking: Optional[bool] = False
     reasoning_effort: Optional[str] = "high"
     temperature: Optional[float] = 1.0
     max_tokens: Optional[int] = 4096
@@ -62,7 +61,6 @@ async def call_deepseek(request: ChatRequest):
         "stream": False
     }
     
-    # ✅ Sirf tabhi thinking add karo jab True ho
     if request.thinking:
         payload["thinking"] = {"type": "enabled"}
         payload["reasoning_effort"] = request.reasoning_effort
@@ -83,7 +81,7 @@ async def call_deepseek(request: ChatRequest):
         return response.json()
 
 # ================================================================
-# API ENDPOINTS - ✅ VERCEL KE LIYE FIXED
+# API ENDPOINTS
 # ================================================================
 
 @app.get("/")
@@ -115,15 +113,15 @@ async def get_models():
 async def chat_get(
     message: str = Query(..., description="Your message"),
     model: str = Query("deepseek-chat", description="Model name"),
-    thinking: bool = Query(False, description="Enable thinking mode"),  # ✅ Default False
+    thinking: bool = Query(False, description="Enable thinking mode"),
     system: str = Query("You are a helpful assistant.", description="System prompt")
 ):
     """Chat with DeepSeek AI (GET - Browser friendly)"""
     
-    if not DEEPSEEK_API_KEY or DEEPSEEK_API_KEY == "your-api-key-here":
+    if not DEEPSEEK_API_KEY:
         return {
             "success": False,
-            "error": "❌ API Key not configured! Set DEEPSEEK_API_KEY in Vercel Environment Variables.",
+            "error": "❌ API Key not configured!",
             "developer": "@notxsatvir"
         }
     
@@ -177,9 +175,3 @@ async def chat_post(request: ChatRequest):
         thinking=request.thinking,
         system=request.system_prompt
     )
-
-# ✅ Vercel serverless handler
-def handler(event, context):
-    """Vercel serverless function handler"""
-    from mangum import Mangum
-    return Mangum(app)(event, context)
