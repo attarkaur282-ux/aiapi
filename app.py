@@ -14,7 +14,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "sk-bd0c38ac62984643a852dc67619cc1bf")
+DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "c5dc372566601ed8745c469469e054e4")
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 
 @app.get("/")
