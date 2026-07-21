@@ -1,25 +1,19 @@
-#!/usr/bin/env python3
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-import uvicorn
 import httpx
 from typing import Optional
+import os
 
 # ================================================================
-# CONFIG - YAHAN APNI API KEY DAALO
+# CONFIG
 # ================================================================
-DEEPSEEK_API_KEY = "sk-583e4a59c58e480384006e9b217f2087"  # ✅ Aapki API Key
+DEEPSEEK_API_KEY = "sk-583e4a59c58e480384006e9b217f2087"
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 
 # ================================================================
 # APP
 # ================================================================
-app = FastAPI(
-    title="DeepSeek Reply API",
-    description="Powered by @notxsatvir",
-    version="1.0"
-)
+app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
@@ -27,57 +21,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# ================================================================
-# MODELS
-# ================================================================
-class ChatRequest(BaseModel):
-    message: str
-    model: Optional[str] = "deepseek-v4-pro"
-    thinking: Optional[bool] = True
-    reasoning_effort: Optional[str] = "high"
-    temperature: Optional[float] = 1.0
-    max_tokens: Optional[int] = 4096
-    system_prompt: Optional[str] = "You are a helpful assistant."
-
-# ================================================================
-# DEEPSEEK API CALL
-# ================================================================
-async def call_deepseek(request: ChatRequest):
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {DEEPSEEK_API_KEY}"
-    }
-    
-    messages = [
-        {"role": "system", "content": request.system_prompt},
-        {"role": "user", "content": request.message}
-    ]
-    
-    payload = {
-        "model": request.model,
-        "messages": messages,
-        "temperature": request.temperature,
-        "max_tokens": request.max_tokens,
-        "stream": False,
-        "thinking": {"type": "enabled"} if request.thinking else {"type": "disabled"},
-        "reasoning_effort": request.reasoning_effort
-    }
-    
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        response = await client.post(
-            f"{DEEPSEEK_BASE_URL}/chat/completions",
-            headers=headers,
-            json=payload
-        )
-        
-        if response.status_code != 200:
-            raise HTTPException(
-                status_code=response.status_code,
-                detail=f"DeepSeek API Error: {response.text}"
-            )
-        
-        return response.json()
 
 # ================================================================
 # API ENDPOINTS
@@ -90,32 +33,17 @@ async def root():
         "developer": "@notxsatvir",
         "version": "1.0",
         "status": "active",
-        "endpoints": {
-            "/": "API Info",
-            "/models": "Available models",
-            "/chat?message=Hello": "Chat with DeepSeek (GET)",
-            "/chat": "Chat with DeepSeek (POST)"
-        }
-    }
-
-@app.get("/models")
-async def get_models():
-    return {
-        "models": [
-            {"id": "deepseek-v4-pro", "name": "DeepSeek V4 Pro", "description": "Most powerful"},
-            {"id": "deepseek-v4-flash", "name": "DeepSeek V4 Flash", "description": "Fast & efficient"},
-            {"id": "deepseek-chat", "name": "DeepSeek Chat", "description": "Legacy"}
-        ]
+        "message": "✅ API is working! Use /chat?message=your_message"
     }
 
 @app.get("/chat")
-async def chat_get(
+async def chat(
     message: str = Query(..., description="Your message"),
     model: str = Query("deepseek-v4-pro", description="Model name"),
     thinking: bool = Query(True, description="Enable thinking mode"),
     system: str = Query("You are a helpful assistant.", description="System prompt")
 ):
-    """Chat with DeepSeek AI (GET - Browser friendly)"""
+    """Chat with DeepSeek AI"""
     
     if not DEEPSEEK_API_KEY:
         return {
@@ -124,38 +52,65 @@ async def chat_get(
             "developer": "@notxsatvir"
         }
     
-    request = ChatRequest(
-        message=message,
-        model=model,
-        thinking=thinking,
-        system_prompt=system
-    )
-    
     try:
-        result = await call_deepseek(request)
-        
-        reply = result["choices"][0]["message"]["content"]
-        thinking_content = result["choices"][0]["message"].get("reasoning_content", None)
-        usage = result.get("usage", {})
-        model_used = result.get("model", model)
-        
-        return {
-            "success": True,
-            "reply": reply,
-            "thinking_content": thinking_content,
-            "model": model_used,
-            "usage": {
-                "prompt_tokens": usage.get("prompt_tokens", 0),
-                "completion_tokens": usage.get("completion_tokens", 0),
-                "total_tokens": usage.get("total_tokens", 0)
-            },
-            "developer": "@notxsatvir"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {DEEPSEEK_API_KEY}"
         }
         
-    except HTTPException as e:
+        messages = [
+            {"role": "system", "content": system},
+            {"role": "user", "content": message}
+        ]
+        
+        payload = {
+            "model": model,
+            "messages": messages,
+            "temperature": 1.0,
+            "max_tokens": 4096,
+            "stream": False,
+            "thinking": {"type": "enabled"} if thinking else {"type": "disabled"},
+            "reasoning_effort": "high"
+        }
+        
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(
+                f"{DEEPSEEK_BASE_URL}/chat/completions",
+                headers=headers,
+                json=payload
+            )
+            
+            if response.status_code != 200:
+                return {
+                    "success": False,
+                    "error": f"DeepSeek API Error: {response.status_code}",
+                    "detail": response.text[:200],
+                    "developer": "@notxsatvir"
+                }
+            
+            result = response.json()
+            
+            reply = result["choices"][0]["message"]["content"]
+            thinking_content = result["choices"][0]["message"].get("reasoning_content", None)
+            usage = result.get("usage", {})
+            
+            return {
+                "success": True,
+                "reply": reply,
+                "thinking_content": thinking_content,
+                "model": model,
+                "usage": {
+                    "prompt_tokens": usage.get("prompt_tokens", 0),
+                    "completion_tokens": usage.get("completion_tokens", 0),
+                    "total_tokens": usage.get("total_tokens", 0)
+                },
+                "developer": "@notxsatvir"
+            }
+        
+    except httpx.TimeoutException:
         return {
             "success": False,
-            "error": f"❌ {e.detail}",
+            "error": "❌ Request timeout! Try again.",
             "developer": "@notxsatvir"
         }
     except Exception as e:
@@ -165,26 +120,7 @@ async def chat_get(
             "developer": "@notxsatvir"
         }
 
-@app.post("/chat")
-async def chat_post(request: ChatRequest):
-    """Chat with DeepSeek AI (POST)"""
-    return await chat_get(
-        message=request.message,
-        model=request.model,
-        thinking=request.thinking,
-        system=request.system_prompt
-    )
-
 # ================================================================
-# MAIN
+# FOR VERCEL - IMPORTANT FIX
 # ================================================================
-if __name__ == "__main__":
-    print("""
-    ╔══════════════════════════════════════════╗
-    ║   🤖 DeepSeek Reply API                 ║
-    ║   👤 Developer: @notxsatvir             ║
-    ║   ✅ API Key: Set                       ║
-    ║   🚀 Ready to use!                     ║
-    ╚══════════════════════════════════════════╝
-    """)
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+handler = app
